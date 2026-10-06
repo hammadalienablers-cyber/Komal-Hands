@@ -1,0 +1,6 @@
+{
+  "name": "Komal Accessories",
+  "description": "Premium boutique e-commerce store for teen hair accessories, cute jewelry, trendy adult pieces, baby accessories, and luxury gift hampers with secure checkout and live order tracking.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
