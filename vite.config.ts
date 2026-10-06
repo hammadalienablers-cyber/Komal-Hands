@@ -5,7 +5,7 @@ import { defineConfig } from 'vite';
 
 export default defineConfig(() => {
   return {
-    base: '/komal-accessories/',
+    base: '/Komal-Hands/',
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
