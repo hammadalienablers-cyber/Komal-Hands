@@ -102,6 +102,19 @@ interface ShopContextType {
   setIsTrackOrderOpen: (open: boolean) => void;
   openOrderTrackerWithId: (orderId?: string) => void;
 
+  // Customer Accounts & Authentication
+  isCustomerAuthOpen: boolean;
+  setIsCustomerAuthOpen: (open: boolean) => void;
+  isCustomerAccountOpen: boolean;
+  setIsCustomerAccountOpen: (open: boolean) => void;
+  customerUser: any | null;
+  customerProfile: { fullName: string; phone: string; city: string; address: string } | null;
+  customerOrders: Order[];
+  signInCustomer: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
+  signUpCustomer: (email: string, password: string, fullName: string, phone: string, city: string, address: string) => Promise<{ success: boolean; error?: string }>;
+  signOutCustomer: () => Promise<void>;
+  updateCustomerProfile: (profile: { fullName: string; phone: string; city: string; address: string }) => Promise<{ success: boolean; error?: string }>;
+
   // Admin Portal & Security
   isAdminMode: boolean;
   setIsAdminMode: (active: boolean) => void;
@@ -141,6 +154,13 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [adminEmail, setAdminEmail] = useState<string | null>(null);
   const [isAdminMode, setIsAdminMode] = useState<boolean>(false);
   const [isAdminLoginOpen, setIsAdminLoginOpen] = useState<boolean>(false);
+
+  // Customer account state
+  const [isCustomerAuthOpen, setIsCustomerAuthOpen] = useState<boolean>(false);
+  const [isCustomerAccountOpen, setIsCustomerAccountOpen] = useState<boolean>(false);
+  const [customerUser, setCustomerUser] = useState<any | null>(null);
+  const [customerProfile, setCustomerProfile] = useState<{ fullName: string; phone: string; city: string; address: string } | null>(null);
+  const [customerOrders, setCustomerOrders] = useState<Order[]>([]);
 
   // Customer Local State: Cart, Wishlist, Applied Coupon
   const [cart, setCart] = useState<CartItem[]>(() => {
@@ -317,11 +337,34 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!isSupabaseConfigured) return;
 
+    const loadCustomerSession = async (session: any) => {
+      if (!session?.user) {
+        setCustomerUser(null);
+        setCustomerProfile(null);
+        setCustomerOrders([]);
+        return;
+      }
+
+      setCustomerUser(session.user);
+
+      const [{ data: profile }, { data: userOrders }] = await Promise.all([
+        supabase.from('profiles').select('full_name, phone, city, address').eq('id', session.user.id).maybeSingle(),
+        supabase.from('orders').select('*').eq('user_id', session.user.id).order('created_at', { ascending: false }),
+      ]);
+
+      setCustomerProfile(profile ? {
+        fullName: profile.full_name || '',
+        phone: profile.phone || '',
+        city: profile.city || '',
+        address: profile.address || '',
+      } : null);
+      setCustomerOrders((userOrders || []).map(mapDbOrderToOrder));
+    };
+
     const checkSession = async () => {
       try {
         const { data: { session } } = await supabase.auth.getSession();
         if (session?.user) {
-          // Strictly verify user exists in admins table
           const { data: adminRecord } = await supabase
             .from('admins')
             .select('user_id')
@@ -336,6 +379,7 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setAdminEmail(null);
             setIsAdminMode(false);
           }
+          await loadCustomerSession(session);
         }
       } catch (e) {
         console.warn('Auth session check error:', e);
@@ -344,33 +388,34 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     checkSession();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (session?.user) {
-        // Strictly verify user exists in admins table on state changes
-        const { data: adminRecord } = await supabase
-          .from('admins')
-          .select('user_id')
-          .eq('user_id', session.user.id)
-          .maybeSingle();
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (_event, session) => {
+      if (!session?.user) {
+        setIsAdminAuthenticated(false);
+        setAdminEmail(null);
+        setIsAdminMode(false);
+        await loadCustomerSession(null);
+        return;
+      }
 
-        if (adminRecord) {
-          setIsAdminAuthenticated(true);
-          setAdminEmail(session.user.email || null);
-        } else {
-          setIsAdminAuthenticated(false);
-          setAdminEmail(null);
-          setIsAdminMode(false);
-        }
+      const { data: adminRecord } = await supabase
+        .from('admins')
+        .select('user_id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+
+      if (adminRecord) {
+        setIsAdminAuthenticated(true);
+        setAdminEmail(session.user.email || null);
       } else {
         setIsAdminAuthenticated(false);
         setAdminEmail(null);
         setIsAdminMode(false);
       }
+
+      await loadCustomerSession(session);
     });
 
-    return () => {
-      subscription.unsubscribe();
-    };
+    return () => subscription.unsubscribe();
   }, []);
 
   // Fetch admin data whenever admin authentication status changes
@@ -409,6 +454,71 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
       supabase.removeChannel(channel);
     };
   }, [isAdminAuthenticated]);
+
+  // Customer Auth Handlers
+  const signInCustomer = async (email: string, password: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured) return { success: false, error: 'Supabase is not configured.' };
+    try {
+      const { data, error } = await supabase.auth.signInWithPassword({ email: email.trim(), password });
+      if (error) return { success: false, error: error.message };
+      if (!data.user) return { success: false, error: 'Unable to sign in.' };
+      setCustomerUser(data.user);
+      setIsCustomerAuthOpen(false);
+      return { success: true };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Sign in failed.' };
+    }
+  };
+
+  const signUpCustomer = async (email: string, password: string, fullName: string, phone: string, city: string, address: string): Promise<{ success: boolean; error?: string }> => {
+    if (!isSupabaseConfigured) return { success: false, error: 'Supabase is not configured.' };
+    try {
+      const { data, error } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: { data: { full_name: fullName.trim(), phone: phone.trim(), city: city.trim(), address: address.trim() } },
+      });
+      if (error) return { success: false, error: error.message };
+      if (data.user && data.session) {
+        const { error: profileError } = await supabase.from('profiles').upsert({
+          id: data.user.id, full_name: fullName.trim(), phone: phone.trim(), city: city.trim(), address: address.trim(), updated_at: new Date().toISOString(),
+        });
+        if (profileError) return { success: false, error: profileError.message };
+        setCustomerUser(data.user);
+        setCustomerProfile({ fullName: fullName.trim(), phone: phone.trim(), city: city.trim(), address: address.trim() });
+        setIsCustomerAuthOpen(false);
+        return { success: true };
+      }
+      return { success: true, error: 'Account created. Please verify your email, then sign in.' };
+    } catch (err: any) {
+      return { success: false, error: err.message || 'Account creation failed.' };
+    }
+  };
+
+  const signOutCustomer = async () => {
+    await supabase.auth.signOut();
+    setCustomerUser(null);
+    setCustomerProfile(null);
+    setCustomerOrders([]);
+    setIsCustomerAccountOpen(false);
+  };
+
+  const updateCustomerProfile = async (profile: { fullName: string; phone: string; city: string; address: string }): Promise<{ success: boolean; error?: string }> => {
+    if (!customerUser) return { success: false, error: 'Please sign in first.' };
+    const { error } = await supabase.from('profiles').upsert({
+      id: customerUser.id,
+      full_name: profile.fullName.trim(),
+      phone: profile.phone.trim(),
+      city: profile.city.trim(),
+      address: profile.address.trim(),
+      updated_at: new Date().toISOString(),
+    });
+    if (error) return { success: false, error: error.message };
+    setCustomerProfile({
+      fullName: profile.fullName.trim(), phone: profile.phone.trim(), city: profile.city.trim(), address: profile.address.trim(),
+    });
+    return { success: true };
+  };
 
   // Admin Auth Handlers
   const loginAdmin = async (credentials: { email: string; password: string }): Promise<{ success: boolean; error?: string }> => {
@@ -1214,6 +1324,17 @@ export const ShopProvider: React.FC<{ children: React.ReactNode }> = ({ children
         isTrackOrderOpen,
         setIsTrackOrderOpen,
         openOrderTrackerWithId,
+        isCustomerAuthOpen,
+        setIsCustomerAuthOpen,
+        isCustomerAccountOpen,
+        setIsCustomerAccountOpen,
+        customerUser,
+        customerProfile,
+        customerOrders,
+        signInCustomer,
+        signUpCustomer,
+        signOutCustomer,
+        updateCustomerProfile,
         isAdminMode,
         setIsAdminMode,
         isAdminAuthenticated,
