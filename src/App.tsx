@@ -42,8 +42,6 @@ function StoreApp() {
       <>
         <AdminDashboard />
         <AdminLoginModal />
-      <CustomerAuthModal />
-      <CustomerAccountModal />
       </>
     );
   }
@@ -102,6 +100,8 @@ function StoreApp() {
       <OrderTrackerModal />
       <WishlistDrawer />
       <AdminLoginModal />
+      <CustomerAuthModal />
+      <CustomerAccountModal />
 
       {/* Floating WhatsApp Care Action Button */}
       <aside 
