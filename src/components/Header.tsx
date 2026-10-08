@@ -9,7 +9,8 @@ import {
   Sparkles,
   PhoneCall,
   ShieldCheck,
-  LayoutDashboard
+  LayoutDashboard,
+  UserCircle
 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
 import { ProductCategory } from '../types';
@@ -30,7 +31,10 @@ export const Header: React.FC = () => {
     storeSettings,
     isAdminAuthenticated,
     setIsAdminMode,
-    setIsAdminLoginOpen
+    setIsAdminLoginOpen,
+    customerUser,
+    setIsCustomerAuthOpen,
+    setIsCustomerAccountOpen
   } = useShop();
 
   const [isSearchActive, setIsSearchActive] = useState(false);
@@ -197,6 +201,17 @@ export const Header: React.FC = () => {
               <span className="hidden sm:inline font-mono tabular-nums">
                 Rs. {cartSubtotal.toLocaleString()}
               </span>
+            </button>
+
+            {/* Customer Account Button */}
+            <button
+              onClick={() => customerUser ? setIsCustomerAccountOpen(true) : setIsCustomerAuthOpen(true)}
+              className="p-2 rounded-full text-stone-700 hover:text-stone-900 hover:bg-stone-100 transition-colors flex items-center gap-1.5"
+              title={customerUser ? 'My Account' : 'Customer Login'}
+              aria-label={customerUser ? 'My Account' : 'Customer Login'}
+            >
+              <UserCircle className="w-5 h-5" />
+              <span className="hidden xl:inline text-xs font-medium">{customerUser ? 'Account' : 'Sign In'}</span>
             </button>
 
             {/* Admin Portal Toggle Button */}
