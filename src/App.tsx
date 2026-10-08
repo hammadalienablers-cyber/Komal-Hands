@@ -17,6 +17,8 @@ import { OrderTrackerModal } from './components/OrderTrackerModal';
 import { WishlistDrawer } from './components/WishlistDrawer';
 import { AdminDashboard } from './components/admin/AdminDashboard';
 import { AdminLoginModal } from './components/admin/AdminLoginModal';
+import { CustomerAuthModal } from './components/CustomerAuthModal';
+import { CustomerAccountModal } from './components/CustomerAccountModal';
 import { UnconfiguredStoreScreen } from './components/UnconfiguredStoreScreen';
 import { isSupabaseConfigured } from './lib/supabase';
 import { MessageCircle, LayoutDashboard, AlertCircle } from 'lucide-react';
@@ -40,6 +42,8 @@ function StoreApp() {
       <>
         <AdminDashboard />
         <AdminLoginModal />
+      <CustomerAuthModal />
+      <CustomerAccountModal />
       </>
     );
   }
