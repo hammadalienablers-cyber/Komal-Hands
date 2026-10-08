@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { X, Mail, Lock, Phone, User, Sparkles, MapPin, AlertCircle, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { useShop } from '../context/ShopContext';
+import { supabase, isSupabaseConfigured } from '../lib/supabase';
 
 export const CustomerAuthModal: React.FC = () => {
   const { 
@@ -20,6 +21,7 @@ export const CustomerAuthModal: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [successMsg, setSuccessMsg] = useState<string | null>(null);
+  const [resetLoading, setResetLoading] = useState(false);
 
   if (!isCustomerAuthOpen) return null;
 
@@ -59,7 +61,11 @@ export const CustomerAuthModal: React.FC = () => {
       } else {
         const res = await signInCustomer(email, password);
         if (!res.success) {
-          setErrorMsg(res.error || 'Invalid email or password.');
+          setErrorMsg(
+            res.error === 'Invalid login credentials'
+              ? 'Email or password is incorrect. If this is a new account, use Register first, or use Forgot password.'
+              : (res.error || 'Unable to sign in.')
+          );
         } else {
           setSuccessMsg('Signed in successfully!');
           setTimeout(() => {
@@ -71,6 +77,32 @@ export const CustomerAuthModal: React.FC = () => {
       setErrorMsg(err.message || 'Something went wrong. Please try again.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    setErrorMsg(null);
+    setSuccessMsg(null);
+    const cleanEmail = email.trim();
+    if (!cleanEmail) {
+      setErrorMsg('Enter your email address first, then click Forgot password.');
+      return;
+    }
+
+    setResetLoading(true);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(cleanEmail, {
+        redirectTo: window.location.origin + window.location.pathname,
+      });
+      if (error) {
+        setErrorMsg(error.message);
+      } else {
+        setSuccessMsg('Password reset email sent. Check your inbox and follow the link to create a new password.');
+      }
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Unable to send password reset email.');
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -250,6 +282,19 @@ export const CustomerAuthModal: React.FC = () => {
               />
             </div>
           </div>
+
+          {!isSignUp && (
+            <div className="flex justify-end -mt-1">
+              <button
+                type="button"
+                onClick={handleForgotPassword}
+                disabled={resetLoading || !isSupabaseConfigured}
+                className="text-[11px] font-medium text-stone-500 hover:text-rose-700 disabled:opacity-50"
+              >
+                {resetLoading ? 'Sending reset link…' : 'Forgot password?'}
+              </button>
+            </div>
+          )}
 
           <button
             type="submit"
